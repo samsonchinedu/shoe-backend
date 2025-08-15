@@ -1,0 +1,88 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String     @id @default(uuid())
+  email    String     @unique
+  password String
+  name     String
+  role     Role       @default(BUYER)
+
+  kycStatus  String?  @default("pending")
+  kycData    Json? 
+
+  Store    Store[]
+  CartItem CartItem[]
+  Order    Order[]
+}
+
+model Store {
+  id          String  @id @default(uuid())
+  ownerId     String  @unique
+  name        String
+  description String?
+
+  owner    User      @relation(fields: [ownerId], references: [id])
+  products Product[]
+}
+
+model Product {
+  id      String   @id @default(uuid())
+  storeId String
+  title   String
+  size    Float
+  color   String
+  price   Float
+  stock   Int
+  images  String[]
+
+  store Store      @relation(fields: [storeId], references: [id])
+  cart  CartItem[]
+}
+
+model CartItem {
+  id        String @id @default(uuid())
+  userId    String
+  productId String
+  quantity  Int
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  userId      String
+  totalAmount Float
+  status      OrderStatus
+  createdAt   DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+enum Role {
+  BUYER
+  SELLER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
