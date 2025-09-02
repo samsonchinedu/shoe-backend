@@ -57,32 +57,37 @@ export class ProductService {
 
     // Update a product by ID
     async update(id: string, dto: UpdateProductDto, userId: string) {
-        // ensure the product exists
-        await this.findById(id);
+        try {
+            // ensure the product exists
+            const product = await this.findById(id);
 
-        // Get the user's storeId
-        const store = await this.prisma.store.findUnique({
-            where: { ownerId: userId },
-            select: { id: true },
-        })
+            // Check ownership
+            const store = await this.prisma.store.findFirst({
+                where: { ownerId: userId },
+            });
 
-        if (!store) {
-            throw new NotFoundException('Store not found for this user');
+            if (!store || product.storeId !== store.id) {
+                throw new NotFoundException('You do not own this product');
+            }
+
+            return await this.prisma.product.update({
+                where: { id },
+                data: {
+                    title: dto.title,
+                    size: dto.size,
+                    color: dto.color,
+                    price: dto.price,
+                    stock: dto.stock,
+                    images: dto.images,
+                },
+            });
+        } catch (err) {
+            console.error('Update Product Error:', err); // 👈 log actual cause
+            throw err; // rethrow so Nest handles it
         }
-
-        return this.prisma.product.update({
-            where: { id },
-            data: {
-                storeId: store.id,
-                title: dto.title,
-                size: dto.size,
-                color: dto.color,
-                price: dto.price,
-                stock: dto.stock,
-                images: dto.images, // string[]
-            },
-        });
     }
+
+
 
     // Delete a product by ID
     async remove(id: string) {

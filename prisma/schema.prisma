@@ -15,18 +15,19 @@ datasource db {
 }
 
 model User {
-  id       String     @id @default(uuid())
-  email    String     @unique
+  id       String @id @default(uuid())
+  email    String @unique
   password String
   name     String
-  role     Role       @default(BUYER)
+  role     Role   @default(BUYER)
 
-  kycStatus  String?  @default("pending")
-  kycData    Json? 
+  kycStatus KYCStatus @default(PENDING)
+  kycData   Json?
 
   Store    Store[]
   CartItem CartItem[]
   Order    Order[]
+  address  Address?
 }
 
 model Store {
@@ -49,8 +50,34 @@ model Product {
   stock   Int
   images  String[]
 
-  store Store      @relation(fields: [storeId], references: [id])
-  cart  CartItem[]
+  store     Store       @relation(fields: [storeId], references: [id])
+  cart      CartItem[]
+  OrderItem OrderItem[]
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  userId      String
+  totalAmount Float
+  status      OrderStatus
+  createdAt   DateTime    @default(now())
+
+  user    User        @relation(fields: [userId], references: [id])
+  items   OrderItem[]
+  address Address?    @relation(fields: [addressId], references: [id])
+
+  addressId String?
+}
+
+model OrderItem {
+  id        String @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float // snapshot at purchase time
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
 }
 
 model CartItem {
@@ -61,16 +88,28 @@ model CartItem {
 
   user    User    @relation(fields: [userId], references: [id])
   product Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId]) // helpful: one row per product in a user's cart
 }
 
-model Order {
-  id          String      @id @default(uuid())
-  userId      String
-  totalAmount Float
-  status      OrderStatus
-  createdAt   DateTime    @default(now())
+model Address {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+  street     String
+  city       String
+  state      String
+  country    String
+  postalCode String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  order      Order[]
+}
 
-  user User @relation(fields: [userId], references: [id])
+enum KYCStatus {
+  PENDING
+  ACTIVE
+  DENIAL
 }
 
 enum Role {

@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { KYCStatus } from './users/users.service';
 
 export class UpdateKycDto {
     @IsNotEmpty()
@@ -20,4 +21,8 @@ export class UpdateKycDto {
     @IsNotEmpty()
     @IsString()
     idNumber: string;
+
+    @IsOptional()
+    @IsEnum(KYCStatus)
+    kycStatus?: KYCStatus;
 }
