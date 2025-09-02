@@ -1,3 +1,4 @@
+// import { KYCStatus } from './../../node_modules/.prisma/client/index.d';
 import { Injectable, NotFoundException } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -8,6 +9,12 @@ export enum Role {
     BUYER = "BUYER",
     SELLER = "SELLER",
     ADMIN = "ADMIN",
+}
+
+export enum KYCStatus {
+    PENDING = "PENDING",
+    ACTIVE = "ACTIVE",
+    DENIAL = "DENIAL",
 }
 
 @Injectable()
@@ -60,11 +67,10 @@ export class UsersService {
         });
     }
     //KYC Update Method
-    async updateKyc(userId: string, dto: UpdateKycDto): Promise<any> {
+    async updateKyc(userId: string, dto: UpdateKycDto) {
         return this.prisma.user.update({
             where: { id: userId },
             data: {
-                kycStatus: 'pending', // default status
                 kycData: {
                     country: dto.country,
                     phoneNumber: dto.phoneNumber,
@@ -72,7 +78,15 @@ export class UsersService {
                     idType: dto.idType,
                     idNumber: dto.idNumber,
                 },
+                kycStatus: KYCStatus.PENDING, // always pending until admin reviews
             },
+        });
+    }
+
+    async verifyKyc(userId: string, status: KYCStatus) {
+        return this.prisma.user.update({
+            where: { id: userId },
+            data: { kycStatus: status },
         });
     }
 }

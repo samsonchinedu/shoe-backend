@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
 import { ProductService } from "./product.service";
 import { CreateProductDto } from "./dto/create-product.dto";
 import { UpdateProductDto } from "./dto/update-product.dto";
@@ -6,7 +6,7 @@ import { StoreService } from "@/store/store.service";
 import { AuthGuard } from "@nestjs/passport";
 
 
-
+@UseGuards(AuthGuard('jwt'))
 @Controller('product')
 export class ProductController {
     constructor(
@@ -14,7 +14,6 @@ export class ProductController {
         private readonly storeService: StoreService,
     ) { }
 
-    @UseGuards(AuthGuard('jwt'))
     @Post()
     async create(@Body() dto: CreateProductDto, @Req() req: any) {
         const userId = req.user.id;
@@ -35,7 +34,7 @@ export class ProductController {
         return this.productService.findById(id);
     }
 
-    @Patch(':id')
+    @Put(':id')
     update(@Param('id') id: string, @Body() dto: UpdateProductDto, @Req() req: any) {
         const userId = req.user.id
         return this.productService.update(id, dto, userId);
