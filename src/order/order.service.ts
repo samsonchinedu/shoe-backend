@@ -4,21 +4,66 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PaymentService } from './../payment/payment.service';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { AddressDto } from './dto/address.dto';
+import { OrderStatus } from '@prisma/client';
 
 @Injectable()
 export class OrderService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService, 
+        private PaymentService: PaymentService
+    ) { }
 
-    async createOrder(userId: string, dto: { items: { productId: string; quantity: number; price: number }[] }) {
-        const totalAmount = dto.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    async createOrder(userId: string, items: CreateOrderDto['items']) {
+        // Fetch user default address from DB
+        const address = await this.prisma.address.findFirst({
+            where: { userId, }, // or however you store it
+        });
+
+        if (!address) {
+            throw new Error('No default address found for this user');
+        }
+
+        // 2️⃣ Build order items and calculate total
+        const orderItems = await Promise.all(
+            items.map(async (item) => {
+                const product = await this.prisma.product.findUnique({
+                    where: { id: item.productId },
+                });
+                if (!product) throw new Error(`Product ${item.productId} not found`);
+
+                return {
+                    quantity: item.quantity,
+                    price: product.price,
+                    product: {
+                        connect: { id: item.productId },
+                    },
+                };
+            })
+        );
+
+        const totalAmount = orderItems.reduce(
+            (total, item) => total + item.quantity * item.price,
+            0
+        );
+
+        // Create order
         return this.prisma.order.create({
             data: {
                 userId,
                 totalAmount,
-                status: 'PENDING',
-                items: { create: dto.items.map(i => ({ productId: i.productId, quantity: i.quantity, price: i.price })) },
+                addressId: address.id,
+                status: OrderStatus.PENDING,
+                items: {
+                    create: orderItems,
+                },
             },
-            include: { items: true },
+            include: {
+                items: true,
+                address: true,
+            },
         });
     }
 
@@ -42,7 +87,6 @@ export class OrderService {
      * Checkout: convert user's cart items into an order, decrement stock, clear cart.
      */
     async checkout(userId: string, addressId: string) {
-        // 1) Load cart with product
         const cartItems = await this.prisma.cartItem.findMany({
             where: { userId },
             include: { product: true },
@@ -52,35 +96,24 @@ export class OrderService {
             throw new BadRequestException('Cart is empty');
         }
 
-        // 2) Validate stock
         for (const ci of cartItems) {
-            if (!ci.product) {
-                throw new NotFoundException(`Product ${ci.productId} not found`);
-            }
-            if (ci.quantity <= 0) {
-                throw new BadRequestException('Quantity must be > 0');
-            }
+            if (!ci.product) throw new NotFoundException(`Product ${ci.productId} not found`);
+            if (ci.quantity <= 0) throw new BadRequestException('Quantity must be > 0');
             if (ci.product.stock < ci.quantity) {
-                throw new BadRequestException(
-                    `Not enough stock for "${ci.product.title}"`,
-                );
+                throw new BadRequestException(`Not enough stock for "${ci.product.title}"`);
             }
         }
 
-        // Precompute snapshots and total
-        const itemsSnapshot = cartItems.map((ci) => ({
-            productId: ci.productId,
-            quantity: ci.quantity,
-            price: ci.product.price, // snapshot current price
-        }));
-        const totalAmount = itemsSnapshot.reduce(
-            (sum, i) => sum + i.price * i.quantity,
-            0,
+        const totalAmount = cartItems.reduce(
+            (sum, ci) => sum + ci.product.price * ci.quantity,
+            0
         );
 
-        // 3) Transaction: decrement stock, create order+items, clear cart
+        // ✅ Pay using wallet first
+        await this.PaymentService.payWithWallet(userId, totalAmount);
+
+        // 🧾 Proceed with the transaction (stock, order, clear cart)
         const order = await this.prisma.$transaction(async (tx) => {
-            // decrement stock
             for (const ci of cartItems) {
                 await tx.product.update({
                     where: { id: ci.productId },
@@ -88,39 +121,28 @@ export class OrderService {
                 });
             }
 
-            // check address belongs to user
             const address = await tx.address.findFirst({
-                where: {
-                    id: addressId,
-                    userId: userId,
-                },
+                where: { id: addressId, userId },
             });
-            if (!address) {
-                throw new NotFoundException('Address not found for this user');
-            }
+            if (!address) throw new NotFoundException('Address not found for this user');
 
-            // create order + items with address
             const createdOrder = await tx.order.create({
                 data: {
                     userId,
                     totalAmount,
-                    status: 'PENDING',
-                    addressId, // link order to address
+                    status: 'PAID', // changed to paid
+                    addressId,
                     items: {
-                        create: itemsSnapshot.map((i) => ({
-                            productId: i.productId,
-                            quantity: i.quantity,
-                            price: i.price,
+                        create: cartItems.map((ci) => ({
+                            productId: ci.productId,
+                            quantity: ci.quantity,
+                            price: ci.product.price,
                         })),
                     },
                 },
-                include: {
-                    items: true,
-                    address: true, // include address in response
-                },
+                include: { items: true, address: true },
             });
 
-            // clear cart
             await tx.cartItem.deleteMany({ where: { userId } });
 
             return createdOrder;
@@ -128,5 +150,6 @@ export class OrderService {
 
         return order;
     }
+
 
 }

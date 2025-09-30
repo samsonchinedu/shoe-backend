@@ -20,6 +20,11 @@ export class CartController {
         return this.cartService.getCart(userId);
     }
 
+    @Get('all-carts')
+    getAllCarts() {
+        return this.cartService.getAllCarts();
+    }
+
     @Delete(':productId')
     removeFromCart(@GetUser('id') userId: string, @Param('productId') productId: string) {
         return this.cartService.removeFromCart(userId, productId);
