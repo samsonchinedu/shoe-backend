@@ -13,6 +13,7 @@ import { OrderItemModule } from './order-item/order-item.module';
 import { CartItemModule } from './cart-item/cart-item.module';
 import { AddressModule } from './address/address.module';
 import { PaymentModule } from './payment/payment.module';
+import { ConfigModule } from '@nestjs/config';
 
 
 @Module({
@@ -26,7 +27,10 @@ import { PaymentModule } from './payment/payment.module';
     OrderItemModule,
     CartItemModule,
     AddressModule,
-    PaymentModule
+    PaymentModule,
+    ConfigModule.forRoot({
+      isGlobal: true, // 👈 makes it available everywhere
+    })
   ],
   controllers: [AppController],
   providers: [AppService],
