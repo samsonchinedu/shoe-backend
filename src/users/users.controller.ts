@@ -1,5 +1,5 @@
 
-import { KYCStatus, UsersService } from './users.service';
+import { KYCStatus, UsersService, Role } from './users.service';
 import { Controller, ForbiddenException, Get, Request, UseGuards, Post, Body, Put, Param } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateKycDto } from '@/update-kyc.dto';
@@ -30,18 +30,23 @@ export class UsersController {
         return this.usersService.findAll(); // Assuming findAll() returns all users
     }
 
-    // 🔐 KYC Update Method
+    // 🔐 User submits KYC → always pending
     @UseGuards(JwtAuthGuard)
     @Post('kyc')
-    async sumbitKyc(@Request() req, @Body() body: UpdateKycDto) {
-        return this.usersService.updateKyc(req.user.id, body);
+    async submitKyc(@Request() req, @Body() dto: UpdateKycDto) {
+        return this.usersService.updateKyc(req.user.id, dto);
     }
 
-    // ✅ ADMIN reviews KYC
-    @UseGuards(AuthGuard('jwt'), RolesGuard)
-    @Roles('ADMIN')
+    // 🔐 Admin reviews/approves/denies KYC
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(Role.ADMIN)
     @Put(':id/kyc-status')
-    async verifyKyc(@Param('id') userId: string, @Body('status') status: KYCStatus,) {
-        return this.usersService.verifyKyc(userId, status);
+    async verifyKyc(
+        @Param('id') userId: string,
+        @Body('status') status: KYCStatus,
+        @Request() req
+    ) {
+        return this.usersService.verifyKyc(userId, status, req.user.role);
     }
+
 }

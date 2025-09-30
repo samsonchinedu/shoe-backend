@@ -33,6 +33,12 @@ export class CartService {
         });
     }
 
+    async getAllCarts() {
+        return this.prisma.cartItem.findMany({
+            include: { product: true, user: true },
+        });
+    }
+
     async removeFromCart(userId: string, productId: string) {
         return this.prisma.cartItem.delete({
             where: {

@@ -1,5 +1,5 @@
 // import { KYCStatus } from './../../node_modules/.prisma/client/index.d';
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
 import { UpdateKycDto } from "../update-kyc.dto";
@@ -66,27 +66,36 @@ export class UsersService {
             },
         });
     }
-    //KYC Update Method
+    // KYC submission → always pending (even if admin submits for themselves)
     async updateKyc(userId: string, dto: UpdateKycDto) {
+        const kycData = {
+            country: dto.country,
+            phoneNumber: dto.phoneNumber,
+            email: dto.email || null,
+            idType: dto.idType,
+            idNumber: dto.idNumber,
+        };
+
         return this.prisma.user.update({
             where: { id: userId },
             data: {
-                kycData: {
-                    country: dto.country,
-                    phoneNumber: dto.phoneNumber,
-                    email: dto.email || null,
-                    idType: dto.idType,
-                    idNumber: dto.idNumber,
-                },
-                kycStatus: KYCStatus.PENDING, // always pending until admin reviews
+                kycData,
+                kycStatus: KYCStatus.PENDING, // always pending until an ADMIN reviews
             },
         });
     }
 
-    async verifyKyc(userId: string, status: KYCStatus) {
+    // KYC verification → only ADMIN can approve or deny
+    async verifyKyc(userId: string, status: KYCStatus, role: string) {
+        if (role !== Role.ADMIN) {
+            throw new ForbiddenException('Only admins can verify KYC');
+        }
+        
+
         return this.prisma.user.update({
             where: { id: userId },
-            data: { kycStatus: status },
+            data: { kycStatus: status},
         });
     }
+
 }

@@ -1,12 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
-  // output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -15,95 +8,130 @@ datasource db {
 }
 
 model User {
-  id       String @id @default(uuid())
-  email    String @unique
-  password String
-  name     String
-  role     Role   @default(BUYER)
-
-  kycStatus KYCStatus @default(PENDING)
-  kycData   Json?
-
-  Store    Store[]
-  CartItem CartItem[]
-  Order    Order[]
-  address  Address?
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  password     String
+  role         Role          @default(BUYER)
+  kycData      Json?
+  kycStatus    KYCStatus     @default(PENDING)
+  address      Address?
+  CartItem     CartItem[]
+  Order        Order[]
+  Payment      Payment[]
+  Store        Store?
+  transactions Transaction[]
+  wallet       Wallet?
 }
 
 model Store {
-  id          String  @id @default(uuid())
-  ownerId     String  @unique
+  id          String    @id @default(uuid())
+  ownerId     String    @unique
   name        String
   description String?
-
-  owner    User      @relation(fields: [ownerId], references: [id])
-  products Product[]
+  products    Product[]
+  owner       User      @relation(fields: [ownerId], references: [id])
 }
 
 model Product {
-  id      String   @id @default(uuid())
-  storeId String
-  title   String
-  size    Float
-  color   String
-  price   Float
-  stock   Int
-  images  String[]
-
-  store     Store       @relation(fields: [storeId], references: [id])
+  id        String      @id @default(uuid())
+  storeId   String
+  title     String
+  size      Float
+  color     String
+  price     Float
+  stock     Int
+  images    String[]
   cart      CartItem[]
   OrderItem OrderItem[]
+  store     Store       @relation(fields: [storeId], references: [id])
 }
 
 model Order {
   id          String      @id @default(uuid())
   userId      String
   totalAmount Float
-  status      OrderStatus
+  status      OrderStatus @default(PENDING)
   createdAt   DateTime    @default(now())
-
-  user    User        @relation(fields: [userId], references: [id])
-  items   OrderItem[]
-  address Address?    @relation(fields: [addressId], references: [id])
-
-  addressId String?
+  addressId   String?
+  address     Address?    @relation(fields: [addressId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+  items       OrderItem[]
 }
 
 model OrderItem {
-  id        String @id @default(uuid())
+  id        String  @id @default(uuid())
   orderId   String
   productId String
   quantity  Int
-  price     Float // snapshot at purchase time
-
-  order   Order   @relation(fields: [orderId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  price     Float
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
 }
 
 model CartItem {
-  id        String @id @default(uuid())
+  id        String  @id @default(uuid())
   userId    String
   productId String
   quantity  Int
+  product   Product @relation(fields: [productId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
 
-  user    User    @relation(fields: [userId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
-
-  @@unique([userId, productId]) // helpful: one row per product in a user's cart
+  @@unique([userId, productId])
 }
 
 model Address {
-  id         String   @id @default(uuid())
   userId     String   @unique
-  user       User     @relation(fields: [userId], references: [id])
   street     String
   city       String
   state      String
-  country    String
   postalCode String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  country    String
+  id         String   @id @default(uuid())
+  user       User     @relation(fields: [userId], references: [id])
   order      Order[]
+}
+
+model Payment {
+  id          String        @id @default(uuid())
+  userId      String
+  reference   String        @unique
+  amount      Int
+  method      PaymentMethod @default(WALLET)
+  currency    String        @default("NGN")
+  channel     String?
+  gatewayResp String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  status      PaymentStatus
+  user        User          @relation(fields: [userId], references: [id])
+}
+
+model Wallet {
+  id           String        @id @default(uuid())
+  balance      Int           @default(0)
+  userId       String        @unique
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+  user         User          @relation(fields: [userId], references: [id])
+}
+
+model Transaction {
+  id        String             @id @default(uuid())
+  reference String             @unique
+  userId    String
+  walletId  String?
+  amount    Int
+  type      TransactionType    @default(DEBIT)
+  channel   TransactionChannel @default(WALLET)
+  status    TransactionStatus  @default(PENDING)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  user      User               @relation(fields: [userId], references: [id])
+  wallet    Wallet?            @relation(fields: [walletId], references: [id])
 }
 
 enum KYCStatus {
@@ -124,4 +152,33 @@ enum OrderStatus {
   SHIPPED
   DELIVERED
   CANCELLED
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum TransactionChannel {
+  WALLET
+  PAYSTACK
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  ABANDONED
+}
+
+enum PaymentMethod {
+  WALLET
+  CARD
+  BANK_TRANSFER
 }
