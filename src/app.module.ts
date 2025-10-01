@@ -30,7 +30,7 @@ import { ConfigModule } from '@nestjs/config';
     PaymentModule,
     ConfigModule.forRoot({
       isGlobal: true, // 👈 makes it available everywhere
-    })
+    }),
   ],
   controllers: [AppController],
   providers: [AppService],
